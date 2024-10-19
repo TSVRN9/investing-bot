@@ -4,7 +4,7 @@ import { deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { DISCORD_GUILD_ID, DISCORD_TOKEN } from "./config";
 import { AppDataSource, TickerDataSource } from "./db";
-import { fetchMarketsAuxArticles, startSchedules } from "./schedule";
+import { startJobs } from "./jobs";
 
 export const client = new Client({
     intents: [
@@ -53,4 +53,4 @@ AppDataSource.initialize()
         console.error("Error during Data Source initialization", err);
     });
 
-startSchedules();
+startJobs();

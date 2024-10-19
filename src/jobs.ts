@@ -1,13 +1,13 @@
 // @ts-ignore
 import { scheduleJob } from "node-schedule";
 import { Feed } from "./models/feed";
-import { MARKETS_AUX_TOKEN } from "./config";
+import { POLYMARKET_CHANNEL_ID } from "./config";
 import { fetchArticlesForTicker } from "./wrappers/marketaux";
 import { Client, TextChannel } from "discord.js";
 import { client } from "./index";
-import { assert } from "console";
+import { MarketResult, pollPolymarket } from "./wrappers/polymarket";
 
-export function startSchedules() {
+export function startJobs() {
     const scheduleTimes = [
         "0 9 * * 1-5",
         "0 13 * * 1-5",
@@ -16,11 +16,15 @@ export function startSchedules() {
     ];
 
     scheduleTimes.forEach((time) => {
-        scheduleJob(time, fetchMarketsAuxArticles);
+        scheduleJob(time, auxArticlesJob);
     });
+
+    const everyHalfHour = "* */30 * * * *";
+
+    scheduleJob(everyHalfHour, polymarketJob);
 }
 
-export async function fetchMarketsAuxArticles() {
+async function auxArticlesJob() {
     const lastRun = new Date();
     const currentHour = lastRun.getHours();
     if (currentHour === 9) {
@@ -70,7 +74,7 @@ export async function fetchMarketsAuxArticles() {
 
                         const involvedTickers = article.entities
                             .map((entity) => {
-                                const tickerInfo = `${entity.symbol} (${entity.name}, ${entity.industry}) - Sentiment Score: ${entity.sentiment_score.toFixed(2)}`;
+                                const tickerInfo = `${entity.symbol} (${entity.name}, ${entity.industry})`;
                                 return feeds.some(
                                     (f) =>
                                         f.ticker === entity.symbol &&
@@ -101,7 +105,6 @@ export async function fetchMarketsAuxArticles() {
                             `__New article for **${feed.ticker}**__:\n` +
                             `${article.url}\n` +
                             `Published at: ${formattedDate}\n\n` +
-                            `Snippet: ${article.snippet ? article.snippet : "N/A"}\n\n` +
                             `Keywords: ${article.keywords ? article.keywords.join(", ") : "N/A"}\n\n` +
                             `Involved Tickers:\n${involvedTickers}`;
                         await channel.send(message);
@@ -117,6 +120,62 @@ export async function fetchMarketsAuxArticles() {
                 `Error fetching articles for ticker ${feed.ticker}:`,
                 error,
             );
+        }
+    }
+}
+
+export async function polymarketJob() {
+    const results = await pollPolymarket();
+}
+
+async function sendPolymarketEmbed(results: MarketResult[], channelId: string) {
+    for (const result of results) {
+        const channel: TextChannel | null = (await client.channels.fetch(
+            channelId,
+        )) as TextChannel | null;
+
+        if (channel) {
+            const marketName = result.market.name;
+            const yesBid = result.priceData.find(
+                (data) =>
+                    data.side === "buy" &&
+                    data.tokenId === result.market.tokenIds[0],
+            );
+            const yesAsk = result.priceData.find(
+                (data) =>
+                    data.side === "sell" &&
+                    data.tokenId === result.market.tokenIds[0],
+            );
+            const noBid = result.priceData.find(
+                (data) =>
+                    data.side === "buy" &&
+                    data.tokenId === result.market.tokenIds[1],
+            );
+            const noAsk = result.priceData.find(
+                (data) =>
+                    data.side === "sell" &&
+                    data.tokenId === result.market.tokenIds[1],
+            );
+
+            const embed = {
+                title: `Market: ${marketName}`,
+                fields: [
+                    {
+                        name: "Yes",
+                        value: `Bid: ${yesBid ? (yesBid.price * 100).toFixed(1) : "N/A"}¢ / Ask: ${yesAsk ? (yesAsk.price * 100).toFixed(1) : "N/A"}¢`,
+                        inline: true,
+                    },
+                    {
+                        name: "No",
+                        value: `Bid: ${noBid ? (noBid.price * 100).toFixed(1) : "N/A"}¢ / Ask: ${noAsk ? (noAsk.price * 100).toFixed(1) : "N/A"}¢`,
+                        inline: true,
+                    },
+                ],
+            };
+
+            await channel.send({ embeds: [embed] });
+        } else {
+            console.error(`Channel with ID ${channelId} not found`);
         }
     }
 }
