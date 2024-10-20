@@ -124,8 +124,66 @@ async function auxArticlesJob() {
     }
 }
 
+const lastPrices = new Map<
+    string,
+    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
+>();
+
 export async function polymarketJob() {
     const results = await pollPolymarket();
+
+    const filteredResults = results.filter((result) => {
+        const lastPrice = lastPrices.get(result.market.name);
+        const yesBid = result.priceData.find(
+            (data) =>
+                data.side === "buy" &&
+                data.tokenId === result.market.tokenIds[0],
+        );
+        const yesAsk = result.priceData.find(
+            (data) =>
+                data.side === "sell" &&
+                data.tokenId === result.market.tokenIds[0],
+        );
+        const noBid = result.priceData.find(
+            (data) =>
+                data.side === "buy" &&
+                data.tokenId === result.market.tokenIds[1],
+        );
+        const noAsk = result.priceData.find(
+            (data) =>
+                data.side === "sell" &&
+                data.tokenId === result.market.tokenIds[1],
+        );
+
+        if (!lastPrice) {
+            lastPrices.set(result.market.name, {
+                yesBid: yesBid ? yesBid.price : 0,
+                yesAsk: yesAsk ? yesAsk.price : 0,
+                noBid: noBid ? noBid.price : 0,
+                noAsk: noAsk ? noAsk.price : 0,
+            });
+            return true;
+        }
+
+        const priceChanged =
+            (yesBid && Math.abs(yesBid.price - lastPrice.yesBid) >= 0.01) ||
+            (yesAsk && Math.abs(yesAsk.price - lastPrice.yesAsk) >= 0.01) ||
+            (noBid && Math.abs(noBid.price - lastPrice.noBid) >= 0.01) ||
+            (noAsk && Math.abs(noAsk.price - lastPrice.noAsk) >= 0.01);
+
+        if (priceChanged) {
+            lastPrices.set(result.market.name, {
+                yesBid: yesBid ? yesBid.price : lastPrice.yesBid,
+                yesAsk: yesAsk ? yesAsk.price : lastPrice.yesAsk,
+                noBid: noBid ? noBid.price : lastPrice.noBid,
+                noAsk: noAsk ? noAsk.price : lastPrice.noAsk,
+            });
+        }
+
+        return priceChanged;
+    });
+
+    sendPolymarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID);
 }
 
 async function sendPolymarketEmbed(results: MarketResult[], channelId: string) {
