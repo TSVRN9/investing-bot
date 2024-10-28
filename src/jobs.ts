@@ -130,6 +130,7 @@ const lastPrices = new Map<
 >();
 
 export async function polymarketJob() {
+    console.log("starting polymarket job...");
     const results = await pollPolymarket();
 
     const filteredResults = results.filter((result) => {
@@ -182,6 +183,10 @@ export async function polymarketJob() {
 
         return priceChanged;
     });
+
+    console.log(
+        `finishing polymarket job with: ${filteredResults.length} results`,
+    );
 
     sendPolymarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID);
 }

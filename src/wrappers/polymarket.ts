@@ -48,6 +48,9 @@ export async function pollPolymarket() {
                         side: side as "buy" | "sell",
                         price: data.price,
                     });
+                    console.log(
+                        `Fetched price data for market: ${market.name}, token ID: ${tokenId}, side: ${side}, price: ${data.price}`,
+                    );
                 } catch (error) {
                     console.error(
                         `Error fetching data for market ${market.name} with token ID ${tokenId}:`,
