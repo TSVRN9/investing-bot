@@ -50,5 +50,24 @@ export async function getKalshiMarketData(): Promise<{
         fetchMarket(urls.DJT),
         fetchMarket(urls.KH),
     ]);
+    console.log("Fetched data for DJT:", {
+        marketName: DJT.market.name,
+        buyPrice: DJT.priceData.find(
+            (p) => p.side === "buy" && p.tokenId === DJT.market.tokenIds[0],
+        )?.price,
+        sellPrice: DJT.priceData.find(
+            (p) => p.side === "sell" && p.tokenId === DJT.market.tokenIds[0],
+        )?.price,
+    });
+
+    console.log("Fetched data for KH:", {
+        marketName: KH.market.name,
+        buyPrice: KH.priceData.find(
+            (p) => p.side === "buy" && p.tokenId === KH.market.tokenIds[0],
+        )?.price,
+        sellPrice: KH.priceData.find(
+            (p) => p.side === "sell" && p.tokenId === KH.market.tokenIds[0],
+        )?.price,
+    });
     return { DJT, KH };
 }
