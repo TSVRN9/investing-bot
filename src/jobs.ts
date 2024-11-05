@@ -247,7 +247,7 @@ function extractMarketData(result: MarketResult) {
 async function sendMarketEmbed(
     results: MarketResult[],
     channelId: string,
-    marketName: string,
+    marketApiName: string,
 ) {
     for (const result of results) {
         const channel: TextChannel | null = (await client.channels.fetch(
@@ -259,7 +259,7 @@ async function sendMarketEmbed(
                 extractMarketData(result);
 
             const embed = {
-                title: `${marketName} Market: ${marketName}`,
+                title: `${marketApiName} Market: ${marketName}`,
                 fields: [
                     {
                         name: "Yes",
