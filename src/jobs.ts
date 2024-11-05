@@ -5,7 +5,8 @@ import { POLYMARKET_CHANNEL_ID } from "./config";
 import { fetchArticlesForTicker } from "./wrappers/marketaux";
 import { Client, TextChannel } from "discord.js";
 import { client } from "./index";
-import { MarketResult, pollPolymarket } from "./wrappers/polymarket";
+import { MarketResult, getPolymarketData } from "./wrappers/polymarket";
+import { getKalshiMarketData } from "./wrappers/kalshi";
 
 export function startJobs() {
     const scheduleTimes = [
@@ -22,6 +23,7 @@ export function startJobs() {
     const everyHalfHour = "* */30 * * * *";
 
     scheduleJob(everyHalfHour, polymarketJob);
+    scheduleJob(everyHalfHour, kalshiJob);
 }
 
 async function auxArticlesJob() {
@@ -124,16 +126,13 @@ async function auxArticlesJob() {
     }
 }
 
-const lastPrices = new Map<
-    string,
-    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
->();
-
-export async function polymarketJob() {
-    console.log("starting polymarket job...");
-    const results = await pollPolymarket();
-
-    const filteredResults = results.filter((result) => {
+function lastPriceFilter(
+    lastPrices: Map<
+        string,
+        { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
+    >,
+) {
+    return (result: MarketResult) => {
         const lastPrice = lastPrices.get(result.market.name);
         const yesBid = result.priceData.find(
             (data) =>
@@ -182,46 +181,85 @@ export async function polymarketJob() {
         }
 
         return priceChanged;
-    });
+    };
+}
+
+const lastPolymarketPrices = new Map<
+    string,
+    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
+>();
+
+const lastKalshiPrices = new Map<
+    string,
+    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
+>();
+
+export async function polymarketJob() {
+    console.log("starting polymarket job...");
+    const results = await getPolymarketData();
+
+    const filteredResults = results.filter(
+        lastPriceFilter(lastPolymarketPrices),
+    );
 
     console.log(
         `finishing polymarket job with: ${filteredResults.length} results`,
     );
 
-    sendPolymarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID);
+    sendMarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID, "Polymarket");
 }
 
-async function sendPolymarketEmbed(results: MarketResult[], channelId: string) {
+export async function kalshiJob() {
+    console.log("starting kalshi job...");
+    const results = await getKalshiMarketData();
+
+    const filteredResults = Object.values(results).filter(
+        lastPriceFilter(lastKalshiPrices),
+    );
+
+    console.log(`finishing kalshi job with: ${filteredResults.length} results`);
+
+    sendMarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID, "Kalshi");
+}
+
+function extractMarketData(result: MarketResult) {
+    const marketName = result.market.name;
+    const yesBid = result.priceData.find(
+        (data) =>
+            data.side === "buy" && data.tokenId === result.market.tokenIds[0],
+    );
+    const yesAsk = result.priceData.find(
+        (data) =>
+            data.side === "sell" && data.tokenId === result.market.tokenIds[0],
+    );
+    const noBid = result.priceData.find(
+        (data) =>
+            data.side === "buy" && data.tokenId === result.market.tokenIds[1],
+    );
+    const noAsk = result.priceData.find(
+        (data) =>
+            data.side === "sell" && data.tokenId === result.market.tokenIds[1],
+    );
+
+    return { marketName, yesBid, yesAsk, noBid, noAsk };
+}
+
+async function sendMarketEmbed(
+    results: MarketResult[],
+    channelId: string,
+    marketName: string,
+) {
     for (const result of results) {
         const channel: TextChannel | null = (await client.channels.fetch(
             channelId,
         )) as TextChannel | null;
 
         if (channel) {
-            const marketName = result.market.name;
-            const yesBid = result.priceData.find(
-                (data) =>
-                    data.side === "buy" &&
-                    data.tokenId === result.market.tokenIds[0],
-            );
-            const yesAsk = result.priceData.find(
-                (data) =>
-                    data.side === "sell" &&
-                    data.tokenId === result.market.tokenIds[0],
-            );
-            const noBid = result.priceData.find(
-                (data) =>
-                    data.side === "buy" &&
-                    data.tokenId === result.market.tokenIds[1],
-            );
-            const noAsk = result.priceData.find(
-                (data) =>
-                    data.side === "sell" &&
-                    data.tokenId === result.market.tokenIds[1],
-            );
+            const { marketName, yesBid, yesAsk, noBid, noAsk } =
+                extractMarketData(result);
 
             const embed = {
-                title: `Market: ${marketName}`,
+                title: `${marketName} Market: ${marketName}`,
                 fields: [
                     {
                         name: "Yes",

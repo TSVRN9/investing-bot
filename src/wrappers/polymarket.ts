@@ -12,7 +12,7 @@ export type MarketResult = {
     }[];
 };
 
-export async function pollPolymarket() {
+export async function getPolymarketData() {
     const endpoint = "https://clob.polymarket.com";
     const markets: Market[] = [
         {

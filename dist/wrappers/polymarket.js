@@ -9,8 +9,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pollPolymarket = pollPolymarket;
-function pollPolymarket() {
+exports.getPolymarketData = getPolymarketData;
+function getPolymarketData() {
     return __awaiter(this, void 0, void 0, function* () {
         const endpoint = "https://clob.polymarket.com";
         const markets = [
@@ -43,6 +43,7 @@ function pollPolymarket() {
                             side: side,
                             price: data.price,
                         });
+                        console.log(`Fetched price data for market: ${market.name}, token ID: ${tokenId}, side: ${side}, price: ${data.price}`);
                     }
                     catch (error) {
                         console.error(`Error fetching data for market ${market.name} with token ID ${tokenId}:`, error);
