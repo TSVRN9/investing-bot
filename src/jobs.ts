@@ -20,10 +20,10 @@ export function startJobs() {
         scheduleJob(time, auxArticlesJob);
     });
 
-    const everyHalfHour = "* */30 * * * *";
+    // const everyHalfHour = "* */30 * * * *";
 
-    scheduleJob(everyHalfHour, polymarketJob);
-    scheduleJob(everyHalfHour, kalshiJob);
+    // scheduleJob(everyHalfHour, polymarketJob);
+    // scheduleJob(everyHalfHour, kalshiJob);
 }
 
 async function auxArticlesJob() {
