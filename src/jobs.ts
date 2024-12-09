@@ -1,12 +1,9 @@
 // @ts-ignore
 import { scheduleJob } from "node-schedule";
 import { Feed } from "./models/feed";
-import { POLYMARKET_CHANNEL_ID } from "./config";
 import { fetchArticlesForTicker } from "./wrappers/marketaux";
 import { Client, TextChannel } from "discord.js";
 import { client } from "./index";
-import { MarketResult, getPolymarketData } from "./wrappers/polymarket";
-import { getKalshiMarketData } from "./wrappers/kalshi";
 
 export function startJobs() {
     const scheduleTimes = [
@@ -20,10 +17,8 @@ export function startJobs() {
         scheduleJob(time, auxArticlesJob);
     });
 
-    // const everyHalfHour = "* */30 * * * *";
-
-    // scheduleJob(everyHalfHour, polymarketJob);
-    // scheduleJob(everyHalfHour, kalshiJob);
+    const everyHalfHour = "* */30 * * * *";
+    scheduleJob(everyHalfHour, rssFeedJob);
 }
 
 async function auxArticlesJob() {
@@ -126,157 +121,86 @@ async function auxArticlesJob() {
     }
 }
 
-function lastPriceFilter(
-    lastPrices: Map<
-        string,
-        { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
-    >,
-) {
-    return (result: MarketResult) => {
-        const lastPrice = lastPrices.get(result.market.name);
-        const yesBid = result.priceData.find(
-            (data) =>
-                data.side === "buy" &&
-                data.tokenId === result.market.tokenIds[0],
-        );
-        const yesAsk = result.priceData.find(
-            (data) =>
-                data.side === "sell" &&
-                data.tokenId === result.market.tokenIds[0],
-        );
-        const noBid = result.priceData.find(
-            (data) =>
-                data.side === "buy" &&
-                data.tokenId === result.market.tokenIds[1],
-        );
-        const noAsk = result.priceData.find(
-            (data) =>
-                data.side === "sell" &&
-                data.tokenId === result.market.tokenIds[1],
-        );
+const FEED_LINKS = [
+    "https://www.theguardian.com/us/rss",
+    "https://www.cbsnews.com/latest/rss/us",
+    "https://feeds.npr.org/1003/rss.xml",
+];
 
-        if (!lastPrice) {
-            lastPrices.set(result.market.name, {
-                yesBid: yesBid ? yesBid.price : 0,
-                yesAsk: yesAsk ? yesAsk.price : 0,
-                noBid: noBid ? noBid.price : 0,
-                noAsk: noAsk ? noAsk.price : 0,
+import Parser from "rss-parser";
+import { RSSFeed } from "./models/rssfeed";
+
+async function rssFeedJob() {
+    const parser = new Parser();
+    const userFeeds = await RSSFeed.find();
+    const now = new Date();
+    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+    const newArticles = (
+        await Promise.all(
+            FEED_LINKS.map(async (link) => {
+                try {
+                    const feed = await parser.parseURL(link);
+                    return feed.items.filter(
+                        (item) =>
+                            new Date(item.pubDate || "") > thirtyMinutesAgo,
+                    );
+                } catch (error) {
+                    console.error(`Error parsing feed from ${link}:`, error);
+                    return [];
+                }
+            }),
+        )
+    ).flat();
+
+    for (const article of newArticles) {
+        for (const userFeed of userFeeds) {
+            const matchesKeyword = userFeed.keywords.some((keyword) => {
+                const lowerKeyword = keyword.toLowerCase();
+                return (
+                    article.title?.toLowerCase().includes(lowerKeyword) ||
+                    article.content?.toLowerCase().includes(lowerKeyword) ||
+                    article.categories?.some((category) =>
+                        category.toLowerCase().includes(lowerKeyword),
+                    )
+                );
             });
-            return true;
-        }
 
-        const priceChanged =
-            (yesBid && Math.abs(yesBid.price - lastPrice.yesBid) >= 0.01) ||
-            (yesAsk && Math.abs(yesAsk.price - lastPrice.yesAsk) >= 0.01) ||
-            (noBid && Math.abs(noBid.price - lastPrice.noBid) >= 0.01) ||
-            (noAsk && Math.abs(noAsk.price - lastPrice.noAsk) >= 0.01);
+            if (matchesKeyword) {
+                // @ts-ignore
+                const channel: TextChannel | null = await client.channels.fetch(
+                    userFeed.channelId,
+                );
+                if (channel) {
+                    const publishedDate = new Date(article.pubDate || "");
+                    const formattedDate = publishedDate.toLocaleString(
+                        "en-US",
+                        {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "numeric",
+                            second: "numeric",
+                            hour12: true,
+                            timeZoneName: "short",
+                        },
+                    );
 
-        if (priceChanged) {
-            lastPrices.set(result.market.name, {
-                yesBid: yesBid ? yesBid.price : lastPrice.yesBid,
-                yesAsk: yesAsk ? yesAsk.price : lastPrice.yesAsk,
-                noBid: noBid ? noBid.price : lastPrice.noBid,
-                noAsk: noAsk ? noAsk.price : lastPrice.noAsk,
-            });
-        }
-
-        return priceChanged;
-    };
-}
-
-const lastPolymarketPrices = new Map<
-    string,
-    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
->();
-
-const lastKalshiPrices = new Map<
-    string,
-    { yesBid: number; yesAsk: number; noBid: number; noAsk: number }
->();
-
-export async function polymarketJob() {
-    console.log("starting polymarket job...");
-    const results = await getPolymarketData();
-
-    const filteredResults = results.filter(
-        lastPriceFilter(lastPolymarketPrices),
-    );
-
-    console.log(
-        `finishing polymarket job with: ${filteredResults.length} results`,
-    );
-
-    sendMarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID, "Polymarket");
-}
-
-export async function kalshiJob() {
-    console.log("starting kalshi job...");
-    const results = await getKalshiMarketData();
-
-    const filteredResults = Object.values(results).filter(
-        lastPriceFilter(lastKalshiPrices),
-    );
-
-    console.log(`finishing kalshi job with: ${filteredResults.length} results`);
-
-    sendMarketEmbed(filteredResults, POLYMARKET_CHANNEL_ID, "Kalshi");
-}
-
-function extractMarketData(result: MarketResult) {
-    const marketName = result.market.name;
-    const yesBid = result.priceData.find(
-        (data) =>
-            data.side === "buy" && data.tokenId === result.market.tokenIds[0],
-    );
-    const yesAsk = result.priceData.find(
-        (data) =>
-            data.side === "sell" && data.tokenId === result.market.tokenIds[0],
-    );
-    const noBid = result.priceData.find(
-        (data) =>
-            data.side === "buy" && data.tokenId === result.market.tokenIds[1],
-    );
-    const noAsk = result.priceData.find(
-        (data) =>
-            data.side === "sell" && data.tokenId === result.market.tokenIds[1],
-    );
-
-    return { marketName, yesBid, yesAsk, noBid, noAsk };
-}
-
-async function sendMarketEmbed(
-    results: MarketResult[],
-    channelId: string,
-    marketApiName: string,
-) {
-    for (const result of results) {
-        const channel: TextChannel | null = (await client.channels.fetch(
-            channelId,
-        )) as TextChannel | null;
-
-        if (channel) {
-            const { marketName, yesBid, yesAsk, noBid, noAsk } =
-                extractMarketData(result);
-
-            const embed = {
-                title: `${marketApiName} Market: ${marketName}`,
-                fields: [
-                    {
-                        name: "Yes",
-                        value: `Bid: ${yesBid ? (yesBid.price * 100).toFixed(1) : "N/A"}¢ / Ask: ${yesAsk ? (yesAsk.price * 100).toFixed(1) : "N/A"}¢`,
-                        inline: true,
-                    },
-                    {
-                        name: "No",
-                        value: `Bid: ${noBid ? (noBid.price * 100).toFixed(1) : "N/A"}¢ / Ask: ${noAsk ? (noAsk.price * 100).toFixed(1) : "N/A"}¢`,
-                        inline: true,
-                    },
-                ],
-            };
-
-            await channel.send({ embeds: [embed] });
-        } else {
-            console.error(`Channel with ID ${channelId} not found`);
+                    const message =
+                        `__New article matching your keywords__:\n` +
+                        `${article.link}\n` +
+                        `Published at: ${formattedDate}\n\n` +
+                        `Title: ${article.title}\n\n` +
+                        `Content: ${article.content || "N/A"}`;
+                    await channel.send(message);
+                } else {
+                    console.error(
+                        `Channel with ID ${userFeed.channelId} not found`,
+                    );
+                }
+            }
         }
     }
 }

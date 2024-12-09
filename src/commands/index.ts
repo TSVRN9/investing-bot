@@ -4,6 +4,7 @@ import * as quack from "./quack";
 import * as check from "./check";
 import * as query from "./query";
 import * as search from "./search";
+import * as tickers from "./tickers";
 import * as feeds from "./feeds";
 
 export const commands = {
@@ -13,5 +14,6 @@ export const commands = {
     check,
     query,
     search,
+    tickers,
     feeds,
 };

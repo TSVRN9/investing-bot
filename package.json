@@ -18,6 +18,7 @@
         "discord.js": "^14.16.3",
         "dotenv": "^16.4.5",
         "node-schedule": "^2.1.1",
+        "rss-parser": "^3.13.0",
         "typeorm": "^0.3.20"
     },
     "devDependencies": {
