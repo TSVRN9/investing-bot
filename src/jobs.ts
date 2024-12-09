@@ -153,16 +153,20 @@ async function rssFeedJob() {
         )
     ).flat();
 
+    console.log(`Fetched ${newArticles.length} new articles from RSS feeds.`);
+    newArticles.forEach((article) => {
+        console.log(`Title: ${article.title}`);
+        console.log(`> Link: ${article.link}`);
+        console.log(`> Published Date: ${article.pubDate}`);
+    });
+
     for (const article of newArticles) {
         for (const userFeed of userFeeds) {
             const matchesKeyword = userFeed.keywords.some((keyword) => {
                 const lowerKeyword = keyword.toLowerCase();
                 return (
                     article.title?.toLowerCase().includes(lowerKeyword) ||
-                    article.content?.toLowerCase().includes(lowerKeyword) ||
-                    article.categories?.some((category) =>
-                        category.toLowerCase().includes(lowerKeyword),
-                    )
+                    article.description?.toLowerCase().includes(lowerKeyword)
                 );
             });
 
