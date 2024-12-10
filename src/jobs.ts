@@ -17,8 +17,9 @@ export function startJobs() {
         scheduleJob(time, auxArticlesJob);
     });
 
-    const everyHalfHour = "* */30 * * * *";
+    const everyHalfHour = "*/30 * * * *";
     scheduleJob(everyHalfHour, rssFeedJob);
+    // rssFeedJob();
 }
 
 async function auxArticlesJob() {
@@ -155,9 +156,8 @@ async function rssFeedJob() {
 
     console.log(`Fetched ${newArticles.length} new articles from RSS feeds.`);
     newArticles.forEach((article) => {
-        console.log(`Title: ${article.title}`);
-        console.log(`> Link: ${article.link}`);
-        console.log(`> Published Date: ${article.pubDate}`);
+        console.log(`> Title: ${article.title}`);
+        console.log(`      Published Date: ${article.pubDate}`);
     });
 
     for (const article of newArticles) {
@@ -171,6 +171,7 @@ async function rssFeedJob() {
             });
 
             if (matchesKeyword) {
+                console.log(`matches: ${article.title}`);
                 // @ts-ignore
                 const channel: TextChannel | null = await client.channels.fetch(
                     userFeed.channelId,
@@ -191,13 +192,11 @@ async function rssFeedJob() {
                             timeZoneName: "short",
                         },
                     );
-
                     const message =
                         `__New article matching your keywords__:\n` +
                         `${article.link}\n` +
                         `Published at: ${formattedDate}\n\n` +
-                        `Title: ${article.title}\n\n` +
-                        `Content: ${article.content || "N/A"}`;
+                        `Title: ${article.title}\n\n`;
                     await channel.send(message);
                 } else {
                     console.error(

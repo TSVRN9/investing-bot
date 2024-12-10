@@ -48,9 +48,8 @@ TickerDataSource.initialize()
 AppDataSource.initialize()
     .then(() => {
         console.log("App Data Source has been initialized!");
+        startJobs();
     })
     .catch((err) => {
         console.error("Error during Data Source initialization", err);
     });
-
-startJobs();
